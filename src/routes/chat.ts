@@ -47,7 +47,20 @@ export default async function chatRoutes(fastify: FastifyInstance) {
     const { chatId, message, type, mediaUrl } = request.body as { chatId: string; message?: string; type: string; mediaUrl?: string };
 
     const content = type === 'text' ? message : mediaUrl;
-    const response = type === 'text' ? await sendMessageToChatGPT(message || '') : null;
+
+    // Fetch chat history
+    const chat = await getChatHistory(chatId);
+
+    const history = chat?.messages.map((msg: any) => ({
+      role: msg.role || 'user',
+      content: msg.content || "undefined",
+    })) || [];
+
+    // Add the new user message to the history
+    history.push({ role: 'user', content: message || '' });
+
+    // Send the updated history to OpenAI
+    const response = type === 'text' ? await sendMessageToChatGPT(history) : null;
 
     await addMessage(chatId, type, content || "", response);
 

@@ -1,5 +1,5 @@
-import { MongoClient } from 'mongodb';
-import dotenv from "dotenv";
+import { MongoClient, ObjectId } from 'mongodb';
+import dotenv from 'dotenv';
 dotenv.config();
 
 const client = new MongoClient(process.env.MONGODB_URL || 'mongodb://localhost:27017');
@@ -27,29 +27,42 @@ export async function createChat(userId: string) {
 }
 
 export async function addMessage(chatId: string, type: string, content: string, botResponse: string | null) {
-  const message = {
+  const userMessage = {
     type, // 'text', 'image', or 'video'
     content,
+    role: 'user',
     timestamp: new Date(),
-    ...(botResponse && { botResponse }),
   };
 
+  const assistantMessage = botResponse
+    ? {
+        type: 'text',
+        content: botResponse,
+        role: 'assistant',
+        timestamp: new Date(),
+      }
+    : null;
+
+  const messagesToPush = [userMessage, ...(assistantMessage ? [assistantMessage] : [])];
+
+  console.log(messagesToPush, chatId);
+
   await db.collection('chats').updateOne(
-    { _id: chatId },
-    { $push: { messages: message } }
+    { _id: new ObjectId(chatId) }, // Ensure chatId is treated as an ObjectId
+    { $push: { messages: { $each: messagesToPush } } } // Push multiple messages if needed
   );
 }
 
 export async function getChatHistory(chatId: string) {
-  return db.collection('chats').findOne({ _id: chatId });
+  return db.collection('chats').findOne({ _id: new ObjectId(chatId) });
 }
 
 export async function getAdminChats(adminId: string) {
-  return db.collection('chats').find({ adminId }).toArray();
+  return db.collection('chats').find({ adminId: new ObjectId(adminId) }).toArray();
 }
 
 export async function terminateChat(chatId: string) {
-  await db.collection('chats').deleteOne({ _id: chatId });
+  await db.collection('chats').deleteOne({ _id: new ObjectId(chatId) });
 }
 
 export async function saveAnnouncement(title: string, body: string, mediaUrls: string[], region: string, city: string) {
@@ -59,7 +72,7 @@ export async function saveAnnouncement(title: string, body: string, mediaUrls: s
 }
 
 export async function getAnnouncementsForUser(userId: string) {
-  const user = await db.collection('users').findOne({ _id: userId });
+  const user = await db.collection('users').findOne({ _id: new ObjectId(userId) });
   if (!user) throw new Error('User not found');
 
   return db.collection('announcements')
@@ -87,5 +100,5 @@ export async function getReports() {
 }
 
 export async function closeReport(reportId: string) {
-  await db.collection('reports').updateOne({ _id: reportId }, { $set: { status: 'closed' } });
+  await db.collection('reports').updateOne({ _id: new ObjectId(reportId) }, { $set: { status: 'closed' } });
 }
